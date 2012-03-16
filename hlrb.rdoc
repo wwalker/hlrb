@@ -1,0 +1,5 @@
+= hlrb
+
+Generate this with
+    hlrb rdoc
+After you have described your command line interface

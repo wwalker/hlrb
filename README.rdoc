@@ -1,0 +1,6 @@
+= hlrb
+
+This is a command line tool to perform rsync backups that use hard linked copies to make each backup a standalone Full backup without consuming too much space.
+
+:include:hlrb.rdoc
+
