@@ -3,7 +3,7 @@
 require 'rubygems'
 require 'yaml'
 require 'pp'
-require 'ruby-debug'
+#require 'ruby-debug'
 require 'logger'
 
 $debug = false
