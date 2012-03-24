@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 require 'rubygems'
 require 'yaml'
@@ -9,25 +9,44 @@ require 'logger'
 $debug = false
 
 class HardLinkRsyncBackup
-  CONFIG_DIR='/etc/hlrb/'
-  BACKUP_DIR='/mnt/6T/hlrb/'
-  RSYNC_OPTIONS='-avHxz'
+  DEFAULTS={}
+  DEFAULTS[:config_dir]    = '/etc/hlrb/'
+  DEFAULTS[:username]      = 'root'
+  DEFAULTS[:rsync_options] ='-avHxz'
+
+  def config(key, fs_name = nil)
+    if fs_name
+      if @host_config
+        value = @host_config[:file_systems][fs_name][key] || @host_config[key] || @system_config[key] || DEFAULTS[key]
+      else
+        value = @system_config[key] || DEFAULTS[key]
+      end
+    else
+      if @host_config
+        value = @host_config[key] || @system_config[key] || DEFAULTS[key]
+      else
+        value = @system_config[key] || DEFAULTS[key]
+      end
+    end
+    return value
+  end
 
   def initialize
+    read_system_config
+    read_host_config
     set_time_vars
     init_log
-    read_host_config
     find_latest_backup
   end
 
   def run
-    @log.info "Beginning backup of #{@host_config[:hostname]}"
+    @log.info "Beginning backup of #{config(:hostname)}"
 
     create_hard_link_copy
     rsync_file_systems
 
 
-    @log.info "Successfully completed backup of #{@host_config[:hostname]}"
+    @log.info "Successfully completed backup of #{config(:hostname)}"
   end
 
   def create_hard_link_copy
@@ -43,22 +62,21 @@ class HardLinkRsyncBackup
   end # def create_hard_link_copy
 
   def rsync_file_systems
-    @host_config[:file_systems].keys.sort.each do |fs_name|
+    config(:file_systems).keys.sort.each do |fs_name|
       rsync_file_system(fs_name)
     end
   end # def rsync_file_systems
 
   def rsync_file_system(fs_name)
-    fs = @host_config[:file_systems][fs_name]
     rsync = "/usr/bin/rsync"
-    options = @host_config[:rsync_options] || RSYNC_OPTIONS
+    options = config(:rsync_options)
     command = [rsync, options, '--delete']
-    if fs[:excludes]
-      excludes = fs[:excludes].map{|e| ['--exclude', e]}.flatten
+    if config(:excludes, fs_name)
+      excludes = config(:excludes, fs_name).map{|e| ['--exclude', e]}.flatten
       command += excludes
     end
-    command << (hostpath(fs) + sourcepath(fs))
-    command << (@start_time_clean + sourcepath(fs))
+    command << (hostpath(fs_name) + sourcepath(fs_name))
+    command << (@start_time_clean + sourcepath(fs_name))
     @log.debug command.pretty_inspect
 
     @log.info "Begin rsync of the '#{fs_name}' file_system"
@@ -70,14 +88,14 @@ class HardLinkRsyncBackup
     @log.info "Completed rsync of the '#{fs_name}' file_system"
   end # def rsync_file_system
 
-  def hostpath(fs)
-    user = @host_config[:username] || fs[:username] || 'root'
-    host = @host_config[:hostname]
+  def hostpath(fs_name)
+    user = config(:username,fs_name)
+    host = config(:hostname)
     return "#{user}@#{host}:"
   end # def hostpath
 
-  def sourcepath(fs)
-    path = fs[:path]
+  def sourcepath(fs_name)
+    path = config(:path, fs_name)
     if ! path.match(/\/$/)
       path += '/'
     end
@@ -85,10 +103,10 @@ class HardLinkRsyncBackup
   end
 
   def init_log
-    if ! File.directory?(BACKUP_DIR + ARGV[0] + '/logs/')
-      Dir.mkdir(BACKUP_DIR + ARGV[0] + '/logs/')
+    if ! File.directory?(config(:backup_dir) + ARGV[0] + '/logs/')
+      Dir.mkdir(config(:backup_dir) + ARGV[0] + '/logs/')
     end
-    @log = Logger.new(BACKUP_DIR + ARGV[0] + '/logs/' + @start_time_clean + '.log')
+    @log = Logger.new(config(:backup_dir) + ARGV[0] + '/logs/' + @start_time_clean + '.log')
     @log.level=Logger::DEBUG
     @log.info "Starting hlrb for host #{ARGV[0]} at #{@start_time_clean}"
   end # def init_log
@@ -99,21 +117,26 @@ class HardLinkRsyncBackup
     @start_time_clean = @start_time.strftime('%Y-%m-%d_%H-%M-00')
   end # def set_time_vars
 
+  def read_system_config
+    @system_config = []
+
+    system_confg_yaml = File.read(DEFAULTS[:config_dir] + 'system.yaml')
+    @system_config = YAML::load(system_confg_yaml)
+  end # def read_system_config
+
   def read_host_config
     hostname = ARGV[0]
 
-    host_confg_yaml = File.read(CONFIG_DIR + hostname + '.yaml')
+    host_confg_yaml = File.read(config(:config_dir) + hostname + '.yaml')
     @host_config = YAML::load(host_confg_yaml)
-
-    @log.debug @host_config.pretty_inspect
   end # def read_host_config
 
   def find_latest_backup
     @original_pwd = Dir.pwd
-    Dir.chdir(BACKUP_DIR + @host_config[:hostname])
+    Dir.chdir(config(:backup_dir) + config(:hostname))
     @latest_backup = Dir.glob('20*').grep(/^20\d\d-\d\d-\d\d_\d\d-\d\d-\d\d$/).sort[-1]
     if ! @latest_backup
-      raise "No existing base backup.  Possibly mkdir #{BACKUP_DIR + @host_config[:hostname] + '/' + @start_time_clean}"
+      raise "No existing base backup.  Possibly mkdir #{config(:backup_dir) + config(:hostname) + '/' + @start_time_clean}"
     else
       @log.info "Found previous backup to be #{@latest_backup}"
     end
