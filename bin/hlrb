@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/opt/depot/ruby-1.9.3-p125/bin/ruby
 
 require 'rubygems'
 require 'yaml'
@@ -80,7 +80,7 @@ class HardLinkRsyncBackup
     @log.debug command.pretty_inspect
 
     @log.info "Begin rsync of the '#{fs_name}' file_system"
-    system(*command)
+    system(*command, :out => @logfilebase + ".#{fs_name}.rsync.log', :err => :out)
     #system('/bin/true')
     if $? != 0
       raise "Copy command <#{cmd}> failed with return code #{$?}"
@@ -106,7 +106,9 @@ class HardLinkRsyncBackup
     if ! File.directory?(config(:backup_dir) + ARGV[0] + '/logs/')
       Dir.mkdir(config(:backup_dir) + ARGV[0] + '/logs/')
     end
-    @log = Logger.new(config(:backup_dir) + ARGV[0] + '/logs/' + @start_time_clean + '.log')
+    @logfilebase = config(:backup_dir) + ARGV[0] + '/logs/' + @start_time_clean
+    @logfile = File.open(@logfilebase + '.log', 'a')
+    @log = Logger.new(@logfile)
     @log.level=Logger::DEBUG
     @log.info "Starting hlrb for host #{ARGV[0]} at #{@start_time_clean}"
   end # def init_log
