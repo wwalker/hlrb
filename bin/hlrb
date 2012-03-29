@@ -80,7 +80,7 @@ class HardLinkRsyncBackup
     @log.debug command.pretty_inspect
 
     @log.info "Begin rsync of the '#{fs_name}' file_system"
-    system(*command, :out => @logfilebase + ".#{fs_name}.rsync.log', :err => :out)
+    system(*command, :out => @logfilebase + ".#{fs_name}.rsync.log", :err => :out)
     #system('/bin/true')
     if $? != 0
       raise "Copy command <#{cmd}> failed with return code #{$?}"
